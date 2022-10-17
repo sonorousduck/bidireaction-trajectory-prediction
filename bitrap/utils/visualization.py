@@ -82,7 +82,7 @@ class Visualizer():
             
     def initialize(self, img_path=None):
         if self.mode == 'image':
-            self.img = np.array(Image.open(img_path))
+            self.img = np.array(Image.open("../" + img_path))
             self.H, self.W, self.CH = self.img.shape
         elif self.mode == 'plot':
             self.fig, self.ax = plt.subplots()

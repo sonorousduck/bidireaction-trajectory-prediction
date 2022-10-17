@@ -49,10 +49,11 @@ class JAADDataset(data.Dataset):
         pred_bbox = torch.FloatTensor(self.data['pred_bbox'][index])
         cur_image_file = self.data['obs_image'][index][-1]
         pred_resolution = torch.FloatTensor(self.data['pred_resolution'][index])
-        flow_input = torch.FloatTensor(self.data['flow_input'][index])
+        # flow_input = torch.FloatTensor(self.data['flow_input'][index])
 
-        ret = {'input_x':obs_bbox, 'flow_input':flow_input, 
-               'target_y':pred_bbox, 'cur_image_file':cur_image_file, 'pred_resolution':pred_resolution}
+        ret = {'input_x':obs_bbox, 'target_y':pred_bbox, 'cur_image_file':cur_image_file, 'pred_resolution':pred_resolution}
+        # ret = {'input_x':obs_bbox, 'flow_input':flow_input, 
+        #        'target_y':pred_bbox, 'cur_image_file':cur_image_file, 'pred_resolution':pred_resolution}
         ret['timestep'] = int(cur_image_file.split('/')[-1].split('.')[0])
         
         return ret
@@ -90,19 +91,19 @@ class JAADDataset(data.Dataset):
         d['image'] = dataset['image']
         d['pid'] = dataset['pid']
         d['resolution'] = dataset['resolution']
-        d['flow'] = []
+        # d['flow'] = []
         
         # NOTE: TODO: GET FLOWS, need to change it to database generating process. 
         traj_root = os.path.join(self.root, 'trajectories')
-        for images, pids in zip(d['image'], d['pid']):
-            vid = images[0].split('/')[-2]
-            pid = pids[0][0]
-            traj_name = vid + '_' + pid
-            traj_path = os.path.join(traj_root, traj_name+'.pkl')
-            traj = pkl.load(open(traj_path, 'rb'))
-            if len(traj['flow']) != len(images):
-                pdb.set_trace()
-            d['flow'].append(traj['flow'])
+        # for images, pids in zip(d['image'], d['pid']):
+        #     vid = images[0].split('/')[-2]
+        #     pid = pids[0][0]
+        #     traj_name = vid + '_' + pid
+        #     traj_path = os.path.join(traj_root, traj_name+'.pkl')
+        #     traj = pkl.load(open(traj_path, 'rb'))
+        #     if len(traj['flow']) != len(images):
+        #         pdb.set_trace()
+        #     d['flow'].append(traj['flow'])
 
         #  Sample tracks from sequneces
         for k in d.keys():
@@ -209,6 +210,17 @@ class JAADDataset(data.Dataset):
             obs_slices[k].extend([d[down-1:observe_length:down] for d in data_tracks[k]])
             pred_slices[k].extend([d[observe_length+down-1::down] for d in data_tracks[k]])
 
+        # ret =  {'obs_image': obs_slices['image'],
+        #         'obs_pid': obs_slices['pid'],
+        #         'obs_resolution': obs_slices['resolution'],
+        #         'pred_image': pred_slices['image'],
+        #         'pred_pid': pred_slices['pid'],
+        #         'pred_resolution': pred_slices['resolution'],
+        #         'obs_bbox': np.array(obs_slices['bbox']),
+        #         'flow_input': obs_slices['flow'],
+        #         'pred_bbox': np.array(pred_slices['bbox']), 
+        #         'model_opts': opts}
+
         ret =  {'obs_image': obs_slices['image'],
                 'obs_pid': obs_slices['pid'],
                 'obs_resolution': obs_slices['resolution'],
@@ -216,7 +228,6 @@ class JAADDataset(data.Dataset):
                 'pred_pid': pred_slices['pid'],
                 'pred_resolution': pred_slices['resolution'],
                 'obs_bbox': np.array(obs_slices['bbox']),
-                'flow_input': obs_slices['flow'],
                 'pred_bbox': np.array(pred_slices['bbox']), 
                 'model_opts': opts}
         
