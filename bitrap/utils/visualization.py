@@ -81,8 +81,8 @@ class Visualizer():
             raise NameError(mode)
             
     def initialize(self, img_path=None):
-        if self.mode == 'image':
-            self.img = np.array(Image.open("../" + img_path))
+        if self.mode == 'image':            
+            self.img = np.array(Image.open(f"{img_path}"))
             self.H, self.W, self.CH = self.img.shape
         elif self.mode == 'plot':
             self.fig, self.ax = plt.subplots()

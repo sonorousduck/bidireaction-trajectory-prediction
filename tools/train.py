@@ -135,8 +135,9 @@ def main():
         val_loss = do_val(cfg, epoch, model, val_dataloader, cfg.DEVICE, logger=logger)
         if (epoch+1) % 1 == 0:
             inference(cfg, epoch, model, test_dataloader, cfg.DEVICE, logger=logger, eval_kde_nll=False)
-            
-        torch.save(model.state_dict(), os.path.join(save_checkpoint_dir, 'Epoch_{}.pth'.format(str(epoch).zfill(3))))
+        
+        if (epoch+1) % 10 == 0:
+            torch.save(model.state_dict(), os.path.join(save_checkpoint_dir, 'Epoch_{}.pth'.format(str(epoch).zfill(3))))
 
         # update LR
         if cfg.SOLVER.scheduler != 'exp':
