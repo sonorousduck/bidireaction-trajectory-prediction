@@ -94,7 +94,7 @@ class JAADDataset(data.Dataset):
         # d['flow'] = []
         
         # NOTE: TODO: GET FLOWS, need to change it to database generating process. 
-        traj_root = os.path.join(self.root, 'trajectories')
+        # traj_root = os.path.join(self.root, 'trajectories')
         # for images, pids in zip(d['image'], d['pid']):
         #     vid = images[0].split('/')[-2]
         #     pid = pids[0][0]

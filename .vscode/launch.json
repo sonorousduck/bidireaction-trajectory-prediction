@@ -5,13 +5,13 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "train.py",
+            "name": "test.py",
             "type": "python",
             "request": "launch",
-            "program": "tools/train.py",
+            "program": "tools/test.py",
             "console": "integratedTerminal",
             "justMyCode": true,
-            "args": ["--config_file", "configs/bitrap_np_JAAD.yml", "--gpu", "1"]
+            "args": ["--config_file", "configs/bitrap_np_JAAD.yml", "CKPT_DIR", "checkpoints/JAAD_checkpoints/goal_cvae_checkpoints/best.pth"]
         }
     ]
 }
