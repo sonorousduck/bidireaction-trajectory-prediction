@@ -215,7 +215,7 @@ class BiTraPNP(nn.Module):
         enc_h_and_z = torch.cat([h_x.unsqueeze(1).repeat(1, Z.shape[1], 1), Z], dim=-1)
         pred_goal = self.goal_decoder(enc_h_and_z)
         
-        dec_h = enc_h_and_z if self.cfg.DEC_WITH_Z else h_x
+        dec_h = enc_h_and_z if self.cfg.DEC_WITH_Z else h_x 
         pred_traj = self.pred_future_traj(dec_h, pred_goal)
         cur_pos = input_x[:, None, -1, :] if cur_pos is None else cur_pos.unsqueeze(1)
         pred_goal = pred_goal + cur_pos

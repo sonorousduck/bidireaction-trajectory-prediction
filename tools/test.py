@@ -69,7 +69,7 @@ if __name__ == '__main__':
         nargs=argparse.REMAINDER,
     )
     args = parser.parse_args()
-    
+    print(args.config_file)
     cfg.merge_from_file(args.config_file)
     cfg.merge_from_list(args.opts)
     os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
