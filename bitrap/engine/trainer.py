@@ -41,7 +41,6 @@ def do_train(cfg, epoch, model, optimizer, dataloader, device, logger=None, lr_s
             else:
                 input_x = X_global
                 neighbors_st, adjacency, first_history_indices = None, None, None
-
             pred_goal, pred_traj, loss_dict, dist_goal, dist_traj = model(input_x, 
                                                                     y_global, 
                                                                     neighbors_st=neighbors_st, 
@@ -98,7 +97,8 @@ def do_val(cfg, epoch, model, dataloader, device, logger=None):
             else:
                 input_x = X_global
                 neighbors_st, adjacency, first_history_indices = None, None, None
-            
+            test = X_global[:, -1, :cfg.MODEL.DEC_OUTPUT_DIM]
+
             pred_goal, pred_traj, loss_dict, _, _ = model(input_x, 
                                                             y_global, 
                                                             neighbors_st=neighbors_st,
@@ -162,6 +162,7 @@ def inference(cfg, epoch, model, dataloader, device, logger=None, eval_kde_nll=F
             else:
                 input_x = X_global
                 neighbors_st, adjacency, first_history_indices = None, None, None
+            test = X_global[:, -1, :cfg.MODEL.DEC_OUTPUT_DIM]
 
             pred_goal, pred_traj, _, dist_goal, dist_traj = model(input_x, 
                                                                 neighbors_st=neighbors_st,

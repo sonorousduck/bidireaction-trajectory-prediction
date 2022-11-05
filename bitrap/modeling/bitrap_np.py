@@ -162,6 +162,7 @@ class BiTraPNP(nn.Module):
             length_per_batch.append(seq_len-lower_indices[i])
         
         # 1. embed and convert back to pad_list
+        test = torch.cat(pad_list, dim=0)
         x = self.box_embed(torch.cat(pad_list, dim=0))
         pad_list = torch.split(x, length_per_batch)
         
