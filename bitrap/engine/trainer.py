@@ -162,7 +162,6 @@ def inference(cfg, epoch, model, dataloader, device, logger=None, eval_kde_nll=F
             else:
                 input_x = X_global
                 neighbors_st, adjacency, first_history_indices = None, None, None
-            test = X_global[:, -1, :cfg.MODEL.DEC_OUTPUT_DIM]
 
             pred_goal, pred_traj, _, dist_goal, dist_traj = model(input_x, 
                                                                 neighbors_st=neighbors_st,
