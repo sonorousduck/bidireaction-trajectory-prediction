@@ -1,18 +1,31 @@
 import cv2
 import sys
 import matplotlib.pyplot as plt
+import torch
 
 video = cv2.VideoCapture(0)
 
 if video.isOpened() == False:
     print("Error reading video file")
-
+yolo = torch.hub.load('ultralytics/yolov5', 'yolov5s', pretrained=True)
 
 stats = {}
 
 while True:
     ret, frame = video.read()
 
+    results = yolo(frame)
+    # _, frame = cv2.imencode('.jpeg', frame)
+
+    # frame = cv2.flip(frame, 1)
+    
+
+    for j, prediction in enumerate(results.pandas().xyxy):
+        df = results.pandas().xyxy[j]
+        bounding_boxes_pedestrians = df.loc[df['class'] == 0]
+
+        for i, row in bounding_boxes_pedestrians.iterrows():
+            cv2.rectangle(frame, (int(row['xmin']), int(row['ymin'])), (int(row['xmax']), int(row['ymax'])), (255, 0, 0), 1)
 
     # for index, person in enumerate(result):
 
