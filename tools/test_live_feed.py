@@ -2,7 +2,7 @@ import os
 import sys
 import torch
 from torch.nn import functional as FeatureAlphaDropout
-sys.path.append(os.path.realpath('../'))
+sys.path.append(os.path.realpath('.'))
 import numpy as np
 from bitrap.modeling import make_model
 from configs import cfg
@@ -12,12 +12,12 @@ import cv2
 import matplotlib.pyplot as plt
 
 def setup_trajectory_model():
-    cfg.merge_from_file("../configs/bitrap_np_JAAD.yml")
+    cfg.merge_from_file("./configs/bitrap_np_JAAD.yml")
     os.environ['CUDA_VISIBLE_DEVICES'] = "0"
 
     model = make_model(cfg)
     model = model.to(cfg.DEVICE)
-    checkpoint = "../" + cfg.CKPT_DIR + "best.pth"
+    checkpoint = "./" + cfg.CKPT_DIR + "best.pth"
 
     if os.path.isfile(checkpoint):
         model.load_state_dict(torch.load(checkpoint))
@@ -66,10 +66,11 @@ if __name__ == "__main__":
 
     _min = np.array([0,0,0,0])[None, :]
     _max = np.array([1920, 1080, 1920, 1080])[None, :]
-
+    frame_count = 0
 
     while True:
         ret, frame = video.read()
+        frame_count+=1
 
         results = yolo(frame)
         # _, frame = cv2.imencode('.jpeg', frame)
@@ -79,7 +80,7 @@ if __name__ == "__main__":
         for j, prediction in enumerate(results.pandas().xyxy):
             df = results.pandas().xyxy[j]
             bounding_boxes_pedestrians = df.loc[df['class'] == 0]
-
+            data = []
             for i, row in bounding_boxes_pedestrians.iterrows():
                 cv2.rectangle(frame, (int(row['xmin']), int(row['ymin'])), (int(row['xmax']), int(row['ymax'])), (0, 255, 0), 1)
                 bbox = np.array([[row['xmin'], row['ymin'], row['xmax'], row['ymax']]])
@@ -88,19 +89,42 @@ if __name__ == "__main__":
 
                 bbox = (bbox - _min) / (_max - _min)
                 data_for_prediction.append(bbox[0])
+            # data_for_prediction.append(data)
         
         if (len(data_for_prediction) > 15):
-            # Predict trajectory with 15 images
-            # Time speed of this, then see if fast enough, make a rolling calculation instead.
-            # For now, remove 15 values.
+            print(frame_count)
+        #     # Predict trajectory with 15 images
+        #     # Time speed of this, then see if fast enough, make a rolling calculation instead.
+        #     # For now, remove 15 values.
 
-            prediction_data = torch.FloatTensor(np.array(data_for_prediction[:15]))
+            prediction_data = torch.FloatTensor(np.array(data_for_prediction[:15])).cuda()
             prediction_data = prediction_data.unsqueeze(0)
             cur_pos = prediction_data[:, -1, :cfg.MODEL.DEC_OUTPUT_DIM]
             pred_traj, pred_goal = predict(model, prediction_data, cur_pos=prediction_data[-1, :cfg.MODEL.DEC_OUTPUT_DIM])
-            pred_traj = pred_traj.detach().to('cpu').numpy()
-            pred_goal = pred_goal.detach().to('cpu').numpy()
+            pred_traj = pred_traj.detach().cpu().numpy()
+            pred_goal = pred_goal.detach().cpu().numpy()
+            
+            
+            pred_goal = pred_goal * (_max - _min) + _min
+            pred_traj = pred_traj * (_max - _min) + _min
+            # del data_for_prediction[:15]
+            data_for_prediction.pop(0)
 
+            for test in pred_traj:
+                for j, traj in enumerate(test):
+                    for i, box in enumerate(traj):
+                        # if i == len(traj) - 1:
+                        # rect = cv2.boundingRect(testArray)
+                        x, y, w, h = int(box[0]), int(box[1]), int(box[2]), int(box[3])
+                        cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 1)
+                        break
+
+            for goal in pred_goal:
+                for i, location in enumerate(goal):
+                    # if i == len(goal) - 1:
+                    x, y, w, h = int(location[0]), int(location[1]), int(location[2]), int(location[3])
+                    cv2.rectangle(frame, (x, y), (int(x + w) , int(y + h)), (0, 255, 0), 2)
+                    break
 
 
 
