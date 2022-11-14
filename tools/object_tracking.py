@@ -2,57 +2,83 @@ import os
 import sys
 import torch
 from torch.nn import functional as FeatureAlphaDropout
-sys.path.append(os.path.realpath('../'))
 import numpy as np
-# from bitrap.modeling import make_model
-# from configs import cfg
+sys.path.append(os.path.realpath('./'))
+from bitrap.modeling import make_model
+from configs import cfg
 from termcolor import colored 
 from torch.utils.data import DataLoader
 import cv2
 import matplotlib.pyplot as plt
+sys.path.append(os.path.realpath('../'))
 from sort import *
 
-# def setup_trajectory_model():
-#     cfg.merge_from_file("../configs/bitrap_np_JAAD.yml")
-#     os.environ['CUDA_VISIBLE_DEVICES'] = "0"
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-#     model = make_model(cfg)
-#     model = model.to(cfg.DEVICE)
-#     checkpoint = "../" + cfg.CKPT_DIR + "best.pth"
+def setup_trajectory_model():
+    cfg.merge_from_file("./configs/bitrap_np_JAAD.yml")
+    os.environ['CUDA_VISIBLE_DEVICES'] = "0"
 
-#     if os.path.isfile(checkpoint):
-#         model.load_state_dict(torch.load(checkpoint))
-#         print(colored('Loaded checkpoint:{}'.format(checkpoint), 'blue', 'on_green'))
-#     else:
-#         print(colored('The cfg.CKPT_DIR id not a file: {}'.format(checkpoint), 'green', 'on_red'))
+    model = make_model(cfg)
+    model = model.to(cfg.DEVICE)
+    checkpoint = "./" + cfg.CKPT_DIR + "best.pth"
 
-#     return model
+    if os.path.isfile(checkpoint):
+        model.load_state_dict(torch.load(checkpoint))
+        print(colored('Loaded checkpoint:{}'.format(checkpoint), 'blue', 'on_green'))
+    else:
+        print(colored('The cfg.CKPT_DIR id not a file: {}'.format(checkpoint), 'green', 'on_red'))
 
-# def predict(model, input_x, cur_pos = None):
-#     gt_goal = None
-#     cur_pos = input_x[:, -1, :cfg.MODEL.DEC_OUTPUT_DIM] if cur_pos is None else cur_pos
-#     batch_size, seg_len, _ = input_x.shape
+    return model
 
-#     h_x = model.encoder(input_x, None)
-#     Z, KLD = model.gaussian_latent_net(h_x, input_x[:, -1, :cfg.MODEL.DEC_OUTPUT_DIM], None, z_mode=False)
-#     enc_h_and_z = torch.cat([h_x.unsqueeze(1).repeat(1, Z.shape[1], 1), Z], dim=-1)
-#     pred_goal = model.goal_decoder(enc_h_and_z)
-#     # dec_h = enc_h_and_z if model.cfg.DEC_WITH_Z else h_x
+def predict(model, input_x, cur_pos = None):
+    gt_goal = None
+    cur_pos = input_x[:, -1, :cfg.MODEL.DEC_OUTPUT_DIM] if cur_pos is None else cur_pos
+    batch_size, seg_len, _ = input_x.shape
 
-#     pred_goal = model.goal_decoder(enc_h_and_z)
+    h_x = model.encoder(input_x, None)
+    Z, KLD = model.gaussian_latent_net(h_x, input_x[:, -1, :cfg.MODEL.DEC_OUTPUT_DIM], None, z_mode=False)
+    enc_h_and_z = torch.cat([h_x.unsqueeze(1).repeat(1, Z.shape[1], 1), Z], dim=-1)
+    pred_goal = model.goal_decoder(enc_h_and_z)
+    # dec_h = enc_h_and_z if model.cfg.DEC_WITH_Z else h_x
 
-#     # dec_h = enc_h_and_z if model.cfg.DEC_WITH_Z else h_x
-#     pred_traj = model.pred_future_traj(h_x, pred_goal)
-#     cur_pos = input_x[:, -1, :cfg.MODEL.DEC_OUTPUT_DIM] if cur_pos is None else cur_pos.unsqueeze(1)
-#     pred_goal = pred_goal + cur_pos
-#     pred_traj = pred_traj + cur_pos.unsqueeze(1)
+    pred_goal = model.goal_decoder(enc_h_and_z)
 
-#     return pred_traj, pred_goal
+    # dec_h = enc_h_and_z if model.cfg.DEC_WITH_Z else h_x
+    pred_traj = model.pred_future_traj(h_x, pred_goal)
+    cur_pos = input_x[:, -1, :cfg.MODEL.DEC_OUTPUT_DIM] if cur_pos is None else cur_pos.unsqueeze(1)
+    pred_goal = pred_goal + cur_pos
+    pred_traj = pred_traj + cur_pos.unsqueeze(1)
+
+    return pred_traj, pred_goal
+
+class Person:
+    def __init__(self, id):
+        self.id = id
+        # Form is x1, y1, x2, y2, id
+        self.frames = []
+    
+    def add_frame(self, frame):
+        self.frames.append(frame)
+        return len(self.frames) >= 15
+
+    def get_prediction_frames(self):
+        frames = self.frames[:15]
+        self.frames.pop(0)
+        return frames
+
+    def __len__(self):
+        return len(self.frames)
+
+    def __str__(self):
+        return f"Person {self.id}, with {len(self.frames)} frames"
+        
+
 
 
 if __name__ == "__main__":
 
-    # model = setup_trajectory_model()
+    model = setup_trajectory_model()
 
     mot_tracker = Sort() 
     video = cv2.VideoCapture(0)
@@ -60,18 +86,24 @@ if __name__ == "__main__":
     if video.isOpened() == False:
         print("Error reading video file")
     yolo = torch.hub.load('ultralytics/yolov5', 'yolov5s', pretrained=True)
+    cfg.merge_from_file("./configs/bitrap_np_JAAD.yml")
+    os.environ['CUDA_VISIBLE_DEVICES'] = "0"
 
     stats = {}
 
-    data_for_prediction = []
+    ids_to_update = []
 
-    _min = np.array([0,0,0,0])[None, :]
-    _max = np.array([1920, 1080, 1920, 1080])[None, :]
+
+    min_video_size = np.array([0,0,0,0])[None, :]
+    # _max = np.array([1920, 1080, 1920, 1080])[None, :]
+    max_video_size = np.array([video.get(cv2.CAP_PROP_FRAME_WIDTH), video.get(cv2.CAP_PROP_FRAME_HEIGHT), video.get(cv2.CAP_PROP_FRAME_WIDTH), video.get(cv2.CAP_PROP_FRAME_HEIGHT)])[None, :]
+    ids = {}
+    print(video.get(cv2.CAP_PROP_FRAME_WIDTH), video.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    print(video.get(cv2.CAP_PROP_FPS))
 
 
     while True:
         ret, frame = video.read()
-
         results = yolo(frame)
         detections = results.pred[0].cpu().numpy()
         people = []
@@ -86,14 +118,55 @@ if __name__ == "__main__":
 
 
             for j, coords in enumerate(track_bbs_ids.tolist()):
-                x1, y1, x2, y2 = int(coords[0]), int(coords[1]), int(coords[2]), int(coords[3])
-                name_idx = int(coords[4])
+                x1, y1, x2, y2, name_idx = int(coords[0]), int(coords[1]), int(coords[2]), int(coords[3]), int(coords[4])
                 name = f"ID: {name_idx}"
+
+                if name_idx not in ids.keys():
+                    ids[name_idx] = Person(id)                    
+                
+                if ids[name_idx].add_frame(coords):
+                    ids_to_update.append(name_idx)
                 
                 cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
                 cv2.putText(frame, name, (x1, y1-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 0, 0), 2)
                 
+        for person_id in ids_to_update:
+            data_to_predict_on = []
 
+            bounding_boxes = ids[name_idx].get_prediction_frames()
+            
+            for j, row in enumerate(bounding_boxes):
+                bbox = np.array([[row[0], row[1], row[2], row[3]]])
+                bbox[..., [2, 3]] = bbox[..., [2, 3]] - bbox[..., [0, 1]]
+                bbox[..., [0, 1]] += bbox[..., [2, 3]]/2
+
+                bbox = (bbox - min_video_size) / (max_video_size - min_video_size)
+                data_to_predict_on.append(bbox[0])
+            
+            # Should have length greater than 15, due to it only being for looped if that holds true
+            prediction_data = torch.FloatTensor(np.array(data_to_predict_on[:15])).to(device)
+            prediction_data = prediction_data.unsqueeze(0)
+            cur_pos = prediction_data[:, -1, :cfg.MODEL.DEC_OUTPUT_DIM]
+            pred_traj, pred_goal = predict(model, prediction_data, cur_pos=prediction_data[-1, :cfg.MODEL.DEC_OUTPUT_DIM])
+            pred_goal = pred_goal.detach().to('cpu').numpy() * (max_video_size - min_video_size) + min_video_size
+            pred_traj = pred_traj.detach().to('cpu').numpy() * (max_video_size - min_video_size) + min_video_size
+
+            for test in pred_traj:
+                for j, traj in enumerate(test):
+                    for i, box in enumerate(traj):
+                        # if i == len(traj) - 1:
+                        # rect = cv2.boundingRect(testArray)
+                        x, y, w, h = int(box[0]), int(box[1]), int(box[2]), int(box[3])
+                        cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 1)
+                        break
+
+            for goal in pred_goal:
+                for i, location in enumerate(goal):
+                    # if i == len(goal) - 1:
+                    x, y, w, h = int(location[0]), int(location[1]), int(location[2]), int(location[3])
+                    cv2.rectangle(frame, (x, y), (int(x + w) , int(y + h)), (0, 255, 0), 2)
+                    break
+        ids_to_update.clear()
 
 
 
