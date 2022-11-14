@@ -81,7 +81,7 @@ if __name__ == "__main__":
     model = setup_trajectory_model()
 
     mot_tracker = Sort() 
-    video = cv2.VideoCapture(0)
+    video = cv2.VideoCapture(1) # THIS MAKES IT USE THE REALSENSE INSTEAD
 
     if video.isOpened() == False:
         print("Error reading video file")
@@ -94,12 +94,12 @@ if __name__ == "__main__":
     ids_to_update = []
 
 
-    min_video_size = np.array([0,0,0,0])[None, :]
-    # _max = np.array([1920, 1080, 1920, 1080])[None, :]
-    max_video_size = np.array([video.get(cv2.CAP_PROP_FRAME_WIDTH), video.get(cv2.CAP_PROP_FRAME_HEIGHT), video.get(cv2.CAP_PROP_FRAME_WIDTH), video.get(cv2.CAP_PROP_FRAME_HEIGHT)])[None, :]
+    _min = np.array([0,0,0,0])[None, :]
+    _max = np.array([1920, 1080, 1920, 1080])[None, :]
+    # _max = np.array([video.get(cv2.CAP_PROP_FRAME_WIDTH), video.get(cv2.CAP_PROP_FRAME_HEIGHT), video.get(cv2.CAP_PROP_FRAME_WIDTH), video.get(cv2.CAP_PROP_FRAME_HEIGHT)])[None, :]
     ids = {}
-    print(video.get(cv2.CAP_PROP_FRAME_WIDTH), video.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    print(video.get(cv2.CAP_PROP_FPS))
+    # print(video.get(cv2.CAP_PROP_FRAME_WIDTH), video.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    # print(video.get(cv2.CAP_PROP_FPS))
 
 
     while True:
@@ -133,14 +133,14 @@ if __name__ == "__main__":
         for person_id in ids_to_update:
             data_to_predict_on = []
 
-            bounding_boxes = ids[name_idx].get_prediction_frames()
+            bounding_boxes = ids[person_id].get_prediction_frames()
             
             for j, row in enumerate(bounding_boxes):
                 bbox = np.array([[row[0], row[1], row[2], row[3]]])
                 bbox[..., [2, 3]] = bbox[..., [2, 3]] - bbox[..., [0, 1]]
                 bbox[..., [0, 1]] += bbox[..., [2, 3]]/2
 
-                bbox = (bbox - min_video_size) / (max_video_size - min_video_size)
+                bbox = (bbox - _min) / (_max - _min)
                 data_to_predict_on.append(bbox[0])
             
             # Should have length greater than 15, due to it only being for looped if that holds true
@@ -148,8 +148,8 @@ if __name__ == "__main__":
             prediction_data = prediction_data.unsqueeze(0)
             cur_pos = prediction_data[:, -1, :cfg.MODEL.DEC_OUTPUT_DIM]
             pred_traj, pred_goal = predict(model, prediction_data, cur_pos=prediction_data[-1, :cfg.MODEL.DEC_OUTPUT_DIM])
-            pred_goal = pred_goal.detach().to('cpu').numpy() * (max_video_size - min_video_size) + min_video_size
-            pred_traj = pred_traj.detach().to('cpu').numpy() * (max_video_size - min_video_size) + min_video_size
+            pred_goal = pred_goal.detach().to('cpu').numpy() * (_max - _min) + _min
+            pred_traj = pred_traj.detach().to('cpu').numpy() * (_max - _min) + _min
 
             for test in pred_traj:
                 for j, traj in enumerate(test):
@@ -166,6 +166,7 @@ if __name__ == "__main__":
                     x, y, w, h = int(location[0]), int(location[1]), int(location[2]), int(location[3])
                     cv2.rectangle(frame, (x, y), (int(x + w) , int(y + h)), (0, 255, 0), 2)
                     break
+        
         ids_to_update.clear()
 
 
@@ -223,7 +224,7 @@ if __name__ == "__main__":
 
         if ret == True:
             # Flipping the display because laptop camera dumb
-            # frame = cv2.flip(frame, 1)
+            frame = cv2.flip(frame, 1)
             cv2.imshow('Press q to close', frame)
 
             if cv2.waitKey(1) & 0xFF == ord('q'):
