@@ -33,8 +33,9 @@ DATASET:
   BBOX_TYPE: 'cxcywh' # bbox is in cxcywh format
   NORMALIZE: 'zero-one' 
   MIN_BBOX: [0,0,0,0] # the min of cxcywh or x1x2y1y2
-  MAX_BBOX: [1920, 1080, 1920, 1080] # the max of cxcywh or x1x2y1y2
-  # MAX_BBOX: [640, 480, 640, 480]
+  MAX_BBOX: [640, 480, 640, 480] # the max of cxcywh or x1x2y1y2
+  # MAX_BBOX: [1920, 1080, 1920, 1080]
+  
 DATALOADER:
   NUM_WORKERS: 24
 SOLVER:

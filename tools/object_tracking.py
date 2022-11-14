@@ -82,9 +82,14 @@ if __name__ == "__main__":
 
     mot_tracker = Sort() 
     video = cv2.VideoCapture(1) # THIS MAKES IT USE THE REALSENSE INSTEAD
+    
+    video.set(3, 640)
+    video.set(4, 480)
 
     if video.isOpened() == False:
         print("Error reading video file")
+    
+    
     yolo = torch.hub.load('ultralytics/yolov5', 'yolov5s', pretrained=True)
     cfg.merge_from_file("./configs/bitrap_np_JAAD.yml")
     os.environ['CUDA_VISIBLE_DEVICES'] = "0"
@@ -95,11 +100,11 @@ if __name__ == "__main__":
 
 
     _min = np.array([0,0,0,0])[None, :]
-    _max = np.array([1920, 1080, 1920, 1080])[None, :]
+    _max = np.array([640, 480, 640, 480])[None, :]
     # _max = np.array([video.get(cv2.CAP_PROP_FRAME_WIDTH), video.get(cv2.CAP_PROP_FRAME_HEIGHT), video.get(cv2.CAP_PROP_FRAME_WIDTH), video.get(cv2.CAP_PROP_FRAME_HEIGHT)])[None, :]
     ids = {}
-    # print(video.get(cv2.CAP_PROP_FRAME_WIDTH), video.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    # print(video.get(cv2.CAP_PROP_FPS))
+    print(video.get(cv2.CAP_PROP_FRAME_WIDTH), video.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    print(video.get(cv2.CAP_PROP_FPS))
 
 
     while True:
@@ -121,13 +126,29 @@ if __name__ == "__main__":
                 x1, y1, x2, y2, name_idx = int(coords[0]), int(coords[1]), int(coords[2]), int(coords[3]), int(coords[4])
                 name = f"ID: {name_idx}"
 
+                bbox = np.array([[coords[0], coords[1], coords[2], coords[3]]])
+                
+                bbox[..., [2, 3]] = bbox[..., [2, 3]] - bbox[..., [0, 1]]
+                bbox[..., [0, 1]] += bbox[..., [2, 3]] / 2
+                
+                bbox = (bbox - _min) / (_max - _min)
+
+                
+                bbox = bbox[0]
                 if name_idx not in ids.keys():
                     ids[name_idx] = Person(id)                    
                 
                 if ids[name_idx].add_frame(coords):
                     ids_to_update.append(name_idx)
-                
-                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+
+
+                bbox[..., [2, 3]] = bbox[..., [2, 3]] + bbox[..., [0, 1]]
+                bbox[..., [0, 1]] -= bbox[..., [2, 3]] / 2
+                bbox = bbox * (_max - _min) + _min
+
+                x, y, w, h = int(bbox[0]), int(bbox[1]), int(bbox[2]), int(bbox[3])
+                bbox[0], bbox[1], bbox[2], bbox[3] = x, y, int(x + w), int(y + h)
+                cv2.rectangle(frame, (x, y), (int(x + w) , int(y + h)), (0, 255, 0), 2)
                 cv2.putText(frame, name, (x1, y1-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 0, 0), 2)
                 
         for person_id in ids_to_update:
@@ -224,7 +245,10 @@ if __name__ == "__main__":
 
         if ret == True:
             # Flipping the display because laptop camera dumb
-            frame = cv2.flip(frame, 1)
+            # frame = cv2.flip(frame, 1)
+            cv2.namedWindow("Press q to close", cv2.WINDOW_NORMAL)
+            cv2.resizeWindow("Press q to close", 640, 480)
+
             cv2.imshow('Press q to close', frame)
 
             if cv2.waitKey(1) & 0xFF == ord('q'):
