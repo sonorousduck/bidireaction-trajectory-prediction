@@ -12,6 +12,7 @@ import cv2
 import matplotlib.pyplot as plt
 sys.path.append(os.path.realpath('../'))
 from sort import *
+import copy
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -127,10 +128,22 @@ if __name__ == "__main__":
                 name = f"ID: {name_idx}"
 
                 bbox = np.array([[coords[0], coords[1], coords[2], coords[3]]])
-                
-                bbox[..., [2, 3]] = bbox[..., [2, 3]] - bbox[..., [0, 1]]
-                bbox[..., [0, 1]] += bbox[..., [2, 3]] / 2
-                
+                # test = np.array([[coords[0], coords[1], coords[2], coords[3]]])
+
+
+                reconstruction = np.array([[0., 0., 0., 0.]])
+                reconstruction[..., [0, 1]] = bbox[..., [0, 1]]
+
+                # test[..., [2, 3]] -= reconstruction[..., [0, 1]]
+                # test[..., [0, 1]] += reconstruction[..., [2, 3]]
+
+                bbox[..., [2, 3]] -= reconstruction[..., [0, 1]]
+                reconstruction[..., [2, 3]] = bbox[..., [2, 3]] / 2
+                bbox[..., [0, 1]] += reconstruction[..., [2, 3]]
+
+                # print(bbox[0][0] == test[0][0])
+
+
                 bbox = (bbox - _min) / (_max - _min)
 
                 
@@ -142,28 +155,37 @@ if __name__ == "__main__":
                     ids_to_update.append(name_idx)
 
 
-                bbox[..., [2, 3]] = bbox[..., [2, 3]] + bbox[..., [0, 1]]
-                bbox[..., [0, 1]] -= bbox[..., [2, 3]] / 2
                 bbox = bbox * (_max - _min) + _min
+                bbox[..., [0, 1]] -= reconstruction[..., [2, 3]]
+                bbox[..., [2, 3]] += reconstruction[..., [0, 1]]
+                # bbox[..., [0, 1]] -= bbox[..., [2, 3]] * 2
+                # bbox[..., [2, 3]] = bbox[..., [2, 3]] + bbox[..., [0, 1]]
 
-                x, y, w, h = int(bbox[0]), int(bbox[1]), int(bbox[2]), int(bbox[3])
-                bbox[0], bbox[1], bbox[2], bbox[3] = x, y, int(x + w), int(y + h)
-                cv2.rectangle(frame, (x, y), (int(x + w) , int(y + h)), (0, 255, 0), 2)
+                x, y, x2, y2 = int(bbox[0][0]), int(bbox[0][1]), int(bbox[0][2]), int(bbox[0][3])
+                # bbox[0], bbox[1], bbox[2], bbox[3] = x, y, int(x + w), int(y + h)
+                cv2.rectangle(frame, (x, y), (int(x2) , int(y2)), (0, 255, 0), 2)
                 cv2.putText(frame, name, (x1, y1-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 0, 0), 2)
                 
         for person_id in ids_to_update:
             data_to_predict_on = []
 
             bounding_boxes = ids[person_id].get_prediction_frames()
-            
+            reconstruction_array = []
             for j, row in enumerate(bounding_boxes):
+                reconstruction = np.array([[0., 0., 0., 0.]])
+
                 bbox = np.array([[row[0], row[1], row[2], row[3]]])
-                bbox[..., [2, 3]] = bbox[..., [2, 3]] - bbox[..., [0, 1]]
-                bbox[..., [0, 1]] += bbox[..., [2, 3]]/2
+
+                reconstruction[..., [0, 1]] = bbox[..., [0, 1]]
+
+                bbox[..., [2, 3]] -= reconstruction[..., [0, 1]]
+                reconstruction[..., [2, 3]] = bbox[..., [2, 3]] / 2
+                bbox[..., [0, 1]] += reconstruction[..., [2, 3]]
 
                 bbox = (bbox - _min) / (_max - _min)
                 data_to_predict_on.append(bbox[0])
-            
+                reconstruction_array.append(reconstruction)
+            # reconstruction = reconstruction[0]
             # Should have length greater than 15, due to it only being for looped if that holds true
             prediction_data = torch.FloatTensor(np.array(data_to_predict_on[:15])).to(device)
             prediction_data = prediction_data.unsqueeze(0)
@@ -175,8 +197,14 @@ if __name__ == "__main__":
             for test in pred_traj:
                 for j, traj in enumerate(test):
                     for i, box in enumerate(traj):
+                        reconstruction = reconstruction_array[i][0]
                         # if i == len(traj) - 1:
                         # rect = cv2.boundingRect(testArray)
+                        # print(reconstruction)
+                        box[0] -= reconstruction[2]
+                        box[1] -= reconstruction[3]
+                        box[2] += reconstruction[0]
+                        box[3] += reconstruction[1]
                         x, y, w, h = int(box[0]), int(box[1]), int(box[2]), int(box[3])
                         cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 1)
                         break
@@ -184,6 +212,12 @@ if __name__ == "__main__":
             for goal in pred_goal:
                 for i, location in enumerate(goal):
                     # if i == len(goal) - 1:
+                    reconstruction = reconstruction_array[i][0]
+
+                    location[0] -= reconstruction[2]
+                    location[1] -= reconstruction[3]
+                    location[2] += reconstruction[0]
+                    location[3] += reconstruction[1]
                     x, y, w, h = int(location[0]), int(location[1]), int(location[2]), int(location[3])
                     cv2.rectangle(frame, (x, y), (int(x + w) , int(y + h)), (0, 255, 0), 2)
                     break
