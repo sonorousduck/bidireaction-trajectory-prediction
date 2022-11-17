@@ -82,7 +82,7 @@ if __name__ == "__main__":
     model = setup_trajectory_model()
 
     mot_tracker = Sort() 
-    video = cv2.VideoCapture(1) # THIS MAKES IT USE THE REALSENSE INSTEAD
+    video = cv2.VideoCapture(0) # THIS MAKES IT USE THE REALSENSE INSTEAD
     
     video.set(3, 640)
     video.set(4, 480)
@@ -106,10 +106,16 @@ if __name__ == "__main__":
     ids = {}
     print(video.get(cv2.CAP_PROP_FRAME_WIDTH), video.get(cv2.CAP_PROP_FRAME_HEIGHT))
     print(video.get(cv2.CAP_PROP_FPS))
-
+    test = 0
 
     while True:
         ret, frame = video.read()
+        
+        if test < 15:
+            if cv2.imwrite(f"image_{test}.png", frame):
+                test += 1
+        else:
+            print("COMPLETE!")
         results = yolo(frame)
         detections = results.pred[0].cpu().numpy()
         people = []
@@ -168,11 +174,11 @@ if __name__ == "__main__":
                 
         for person_id in ids_to_update:
             data_to_predict_on = []
+            reconstruction = np.array([[0., 0., 0., 0.]])
 
             bounding_boxes = ids[person_id].get_prediction_frames()
-            reconstruction_array = []
+            # reconstruction_array = []
             for j, row in enumerate(bounding_boxes):
-                reconstruction = np.array([[0., 0., 0., 0.]])
 
                 bbox = np.array([[row[0], row[1], row[2], row[3]]])
 
@@ -184,8 +190,8 @@ if __name__ == "__main__":
 
                 bbox = (bbox - _min) / (_max - _min)
                 data_to_predict_on.append(bbox[0])
-                reconstruction_array.append(reconstruction)
-            # reconstruction = reconstruction[0]
+                # reconstruction_array.append(reconstruction)
+            reconstruction = reconstruction[0]
             # Should have length greater than 15, due to it only being for looped if that holds true
             prediction_data = torch.FloatTensor(np.array(data_to_predict_on[:15])).to(device)
             prediction_data = prediction_data.unsqueeze(0)
@@ -194,33 +200,61 @@ if __name__ == "__main__":
             pred_goal = pred_goal.detach().to('cpu').numpy() * (_max - _min) + _min
             pred_traj = pred_traj.detach().to('cpu').numpy() * (_max - _min) + _min
 
-            for test in pred_traj:
-                for j, traj in enumerate(test):
-                    for i, box in enumerate(traj):
-                        reconstruction = reconstruction_array[i][0]
-                        # if i == len(traj) - 1:
-                        # rect = cv2.boundingRect(testArray)
-                        # print(reconstruction)
-                        box[0] -= reconstruction[2]
-                        box[1] -= reconstruction[3]
-                        box[2] += reconstruction[0]
-                        box[3] += reconstruction[1]
+            # Structure of Pred Traj
+            # 4 potential trajectories
+            # 45 frames of predictions
+            # In each 45, there are 20 predictions, not really sure why.
+
+            for traj in pred_traj:
+                for i, frames in enumerate(traj):
+                    box = frames[0]
+                    box[0] -= reconstruction[2]
+                    box[1] -= reconstruction[3]
+                    box[2] += reconstruction[0]
+                    box[3] += reconstruction[1]
+
+
+                    if i < len(traj) - 1:
+                        
+                    # Compute the center of each bounding box
+                        centerX = box[2] + box[0] / 2
+                        centerY = box[3] + box[1] / 2
+
+                        nextBox = traj[i + 1][0]
+                        nextCenterX = nextBox[2] + nextBox[0] / 2
+                        nextCenterY = nextBox[3] + nextBox[1] / 2
                         x, y, w, h = int(box[0]), int(box[1]), int(box[2]), int(box[3])
-                        cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 1)
-                        break
+                        cv2.rectangle(frame, (x, y), (w, h), (255, 0, 0), 1)
+                        # cv2.line(frame, (int(centerX), int(centerY)), (int(nextCenterX), int(nextCenterY)), (0, 0, 255), 1)
+
+            # for traj in pred_traj:
+            #     for j, traj in enumerate(test):
+            #         for i, box in enumerate(traj):
+            #             reconstruction = reconstruction_array[j][0]
+            #             # if i == len(traj) - 1:
+            #             # rect = cv2.boundingRect(testArray)
+            #             # print(reconstruction)
+            #             box[0] -= reconstruction[2]
+            #             box[1] -= reconstruction[3]
+            #             box[2] += reconstruction[0]
+            #             box[3] += reconstruction[1]
+            #             x, y, w, h = int(box[0]), int(box[1]), int(box[2]), int(box[3])
+            #             cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 1)
+            #             break
 
             for goal in pred_goal:
-                for i, location in enumerate(goal):
+                location = goal[0]
+                # for i, location in enumerate(goal):
                     # if i == len(goal) - 1:
-                    reconstruction = reconstruction_array[i][0]
+                    # reconstruction = reconstruction_array[i][0]
 
-                    location[0] -= reconstruction[2]
-                    location[1] -= reconstruction[3]
-                    location[2] += reconstruction[0]
-                    location[3] += reconstruction[1]
-                    x, y, w, h = int(location[0]), int(location[1]), int(location[2]), int(location[3])
-                    cv2.rectangle(frame, (x, y), (int(x + w) , int(y + h)), (0, 255, 0), 2)
-                    break
+                location[0] -= reconstruction[2]
+                location[1] -= reconstruction[3]
+                location[2] += reconstruction[0]
+                location[3] += reconstruction[1]
+                x, y, w, h = int(location[0]), int(location[1]), int(location[2]), int(location[3])
+                cv2.rectangle(frame, (x, y), (int(x + w) , int(y + h)), (0, 255, 0), 2)
+                    # break
         
         ids_to_update.clear()
 
