@@ -211,7 +211,7 @@ if __name__ == "__main__":
             bounding_boxes = trajectory_prediction.predict(frame)
 
             data = pickle.dumps(bounding_boxes)
-            message = struct.pack("trajectory", len(data)) + data
+            message = struct.pack("Q", len(data)) + data
             client_socket.sendall(message)
 
             key = cv2.waitKey(1) & 0xFF
