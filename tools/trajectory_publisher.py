@@ -8,7 +8,7 @@ from object_tracking import *
 
 
 
-class TrajectoryPredictionSubscriber:
+class TrajectoryPredictionPublisher:
     def __init__(self, image_ip_port):
         self.image_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         # Other sockets here
@@ -99,7 +99,7 @@ class TrajectoryPredictionSubscriber:
             # 4 potential trajectories
             # 45 frames of predictions
             # In each 45, there are 20 predictions, not really sure why.
-
+            trajs = []
             for traj in pred_traj:
                 for i, frames in enumerate(traj):
                     box = frames[0]
@@ -119,12 +119,13 @@ class TrajectoryPredictionSubscriber:
                         nextCenterX = nextBox[2] + nextBox[0] / 2
                         nextCenterY = nextBox[3] + nextBox[1] / 2
                         x, y, w, h = int(box[0]), int(box[1]), int(box[2]), int(box[3])
+                        trajs.append((x, y, w, h))
                         # Below is the full bounding box. What is used it prettier to look at
                         # since it will just be a single line on the floor of the bounding box. Much better looking
                         # cv2.rectangle(frame, (x, y), (w, h), (255, 0, 0), 1)
                         cv2.rectangle(frame, (x, h), (w, h + 1), (255, 0, 0), 1)
 
-
+            goals = []
             for goal in pred_goal:
                 location = goal[0]
                 location[0] -= reconstruction[2]
@@ -132,12 +133,16 @@ class TrajectoryPredictionSubscriber:
                 location[2] += reconstruction[0]
                 location[3] += reconstruction[1]
                 x, y, w, h = int(location[0]), int(location[1]), int(location[2]), int(location[3])
+                goals.append((x, y, w, h))
                 cv2.rectangle(frame, (x, y), (int(x + w) , int(y + h)), (0, 255, 0), 2)
         
+        bounding_boxes = {"trajectories": trajs, "goals": goals}
         ids_to_update.clear()
 
-        cv2.imshow("Predictions", frame)
+        # If you need to display, uncomment this
+        # cv2.imshow("Predictions", frame)
 
+        return bounding_boxes
         
 
 
@@ -165,11 +170,23 @@ class TrajectoryPredictionSubscriber:
 
     
 if __name__ == "__main__":
-    host_ip = "192.168.1.7"
+    # Create the server that will publish the information that the trajectory publisher creates
+
+    server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    host_name = socket.gethostname()
+    host_ip = socket.gethostbyname(host_name)
+    trajectory_prediction_port = 5679
+
     image_port = 5678
     image_ip_port = (host_ip, image_port)
+    trajectory_ip_port = (host_ip, trajectory_prediction_port)
 
-    trajectory_prediction = TrajectoryPredictionSubscriber(image_ip_port)
+    trajectory_prediction = TrajectoryPredictionPublisher(image_ip_port)
+
+    server_socket.bind(trajectory_ip_port)
+    server_socket.listen(5)
+    print("LISTENING AT:", trajectory_ip_port)
+
     model = setup_trajectory_model()
     mot_tracker = Sort()
 
@@ -188,8 +205,14 @@ if __name__ == "__main__":
 
     try:
         while True:
+            client_socket,addr = server_socket.accept()
+
             frame = trajectory_prediction.gather_image()
-            trajectory_prediction.predict(frame)
+            bounding_boxes = trajectory_prediction.predict(frame)
+
+            data = pickle.dumps(bounding_boxes)
+            message = struct.pack("trajectory", len(data)) + data
+            client_socket.sendall(message)
 
             key = cv2.waitKey(1) & 0xFF
             if key == ord('q'):
