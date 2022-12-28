@@ -58,8 +58,9 @@ class Occupancy_Trajectory:
         
 
         while not rospy.is_shutdown():
-
-
+            trajectory_goal = self.get_trajectory()
+            
+            # Now, we fuse the trajectory_goal with the occupancy grid... Somehow. I will need to fuse it with the lidar somehow
             rospy.loginfo(self.new_occupancy_grid)
             pub.publish(self.new_occupancy_grid)
             rate.sleep()
